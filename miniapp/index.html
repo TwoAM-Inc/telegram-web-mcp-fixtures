@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="fixture-version" content="2">
+<title>TGMCP Fixture Mini App</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 16px; background: var(--tg-theme-bg-color, #fff); color: var(--tg-theme-text-color, #111); }
+  input, button, select { font-size: 15px; padding: 6px 10px; margin: 3px 2px; }
+  section { border-top: 1px solid #8884; padding: 8px 0; }
+  h2 { font-size: 16px; margin: 4px 0; }
+  .out { font-weight: 600; min-height: 20px; white-space: pre-wrap; }
+  #inner { height: 200px; overflow-y: auto; border: 1px solid #8886; }
+  #inner div { height: 30px; line-height: 30px; padding-left: 8px; }
+  .cards { list-style: none; padding: 0; margin: 0; max-width: 260px; }
+  .cards li { height: 44px; line-height: 44px; margin: 0; padding-left: 12px; border: 1px solid #8886;
+              background: var(--tg-theme-secondary-bg-color, #f3f3f3); user-select: none; touch-action: none; cursor: grab; }
+  .cards li.dragging { opacity: .6; }
+  #list li { height: 40px; line-height: 40px; }
+</style>
+</head>
+<body>
+<h1>TGMCP Fixture Mini App</h1>
+<div>fixture version <span id="version">2</span></div>
+
+<section id="greet-section">
+  <label for="name">Your name</label><br>
+  <input id="name" placeholder="type a name"><br>
+  <button id="greet" onclick="out('out', 'Hello, ' + (val('name') || 'stranger') + '!')">Greet</button>
+  <button id="closeapp" onclick="tg && tg.close()">Close app</button>
+  <div id="out" class="out"></div>
+</section>
+
+<section id="native">
+  <h2>Native buttons</h2>
+  <input id="main-text" value="Submit" aria-label="MainButton text">
+  <label><input type="checkbox" id="main-icon"> icon</label><br>
+  <button id="main-show">Show MainButton</button>
+  <button id="main-hide">Hide MainButton</button>
+  <button id="main-toggle-active">Toggle MainButton active</button>
+  <button id="main-progress">Toggle MainButton progress</button><br>
+  <button id="secondary-show">Show SecondaryButton</button>
+  <button id="secondary-hide">Hide SecondaryButton</button>
+  <select id="secondary-position" aria-label="SecondaryButton position">
+    <option>left</option><option>right</option><option>top</option><option>bottom</option>
+  </select><br>
+  <button id="back-show">Show BackButton</button>
+  <button id="back-hide">Hide BackButton</button><br>
+  <button id="confirm-on">Enable closing confirmation</button>
+  <button id="confirm-off">Disable closing confirmation</button>
+  <div id="native-log" class="out"></div>
+</section>
+
+<section id="popups">
+  <h2>Telegram popups</h2>
+  <button id="tg-alert">showAlert</button>
+  <button id="tg-confirm">showConfirm</button>
+  <button id="tg-popup">showPopup</button>
+  <div id="popup-result" class="out"></div>
+</section>
+
+<section id="dialogs">
+  <h2>Browser dialogs</h2>
+  <button id="js-alert">alert()</button>
+  <button id="js-confirm">confirm()</button>
+  <button id="js-prompt">prompt()</button>
+  <div id="dialog-result" class="out"></div>
+</section>
+
+<section id="network">
+  <h2>Network and console</h2>
+  <button id="fetch-ok">Fetch data</button>
+  <button id="fetch-404">Fetch missing</button>
+  <button id="post-json">Post JSON</button>
+  <button id="console-error">console.error</button>
+  <button id="console-log">console.log</button>
+  <button id="throw">Throw</button>
+  <div id="net-result" class="out"></div>
+</section>
+
+<section id="links">
+  <h2>Links</h2>
+  <button id="open-link">openLink</button>
+  <button id="open-tg-link">openTelegramLink</button>
+</section>
+
+<section id="drag">
+  <h2>Drag</h2>
+  <ul id="sortable" class="cards">
+    <li class="drag" data-card="A">Card A</li><li class="drag" data-card="B">Card B</li>
+    <li class="drag" data-card="C">Card C</li><li class="drag" data-card="D">Card D</li>
+    <li class="drag" data-card="E">Card E</li>
+  </ul>
+  <div id="drag-result" class="out"></div>
+  <h2>Drag after a 300 ms hold</h2>
+  <ul id="sortable-hold" class="cards">
+    <li class="drag" data-card="X">Hold X</li><li class="drag" data-card="Y">Hold Y</li>
+    <li class="drag" data-card="Z">Hold Z</li>
+  </ul>
+  <div id="drag-hold-result" class="out"></div>
+</section>
+
+<section id="inner-section">
+  <h2>Inner scroll</h2>
+  <div id="inner" role="list"></div>
+  <div id="inner-pos" class="out">inner: 0</div>
+</section>
+
+<section id="state-section">
+  <h2>State</h2>
+  <div id="state" class="out"></div>
+  <div id="scroll-pos" class="out">scroll: 0</div>
+</section>
+
+<section id="list-section">
+  <h2>Long list</h2>
+  <ol id="list"></ol>
+  <button id="list-end">Reached the end</button>
+</section>
+
+<script>
+const tg = window.Telegram && Telegram.WebApp;
+const $ = (id) => document.getElementById(id);
+const val = (id) => $(id).value;
+const out = (id, text) => { $(id).textContent = text; };
+const on = (id, fn) => $(id).addEventListener('click', fn);
+const counts = {main: 0, secondary: 0, back: 0};
+const logNative = (which) => { counts[which] += 1; $('native-log').textContent += `${which} pressed ${counts[which]}\n`; };
+const ICON = '5368324170671202286';
+
+if (tg) {
+  tg.ready();
+  tg.MainButton.onClick(() => logNative('main'));
+  tg.SecondaryButton.onClick(() => logNative('secondary'));
+  tg.BackButton.onClick(() => logNative('back'));
+  on('main-show', () => {
+    const p = {text: val('main-text') || 'Submit', is_visible: true, is_active: true};
+    if ($('main-icon').checked) p.icon_custom_emoji_id = ICON;
+    tg.MainButton.setParams(p);
+  });
+  on('main-hide', () => tg.MainButton.hide());
+  on('main-toggle-active', () => tg.MainButton.isActive ? tg.MainButton.disable() : tg.MainButton.enable());
+  on('main-progress', () => tg.MainButton.isProgressVisible ? tg.MainButton.hideProgress() : tg.MainButton.showProgress(false));
+  on('secondary-show', () => tg.SecondaryButton.setParams({text: 'Secondary', is_visible: true, is_active: true,
+                                                           position: val('secondary-position')}));
+  on('secondary-hide', () => tg.SecondaryButton.hide());
+  on('back-show', () => tg.BackButton.show());
+  on('back-hide', () => tg.BackButton.hide());
+  on('confirm-on', () => { tg.enableClosingConfirmation(); out('native-log', $('native-log').textContent + 'closing confirmation on\n'); });
+  on('confirm-off', () => tg.disableClosingConfirmation());
+  on('tg-alert', () => tg.showAlert('fixture tg alert', () => out('popup-result', 'alert closed')));
+  on('tg-confirm', () => tg.showConfirm('fixture tg confirm?', (ok) => out('popup-result', 'confirm: ' + ok)));
+  on('tg-popup', () => tg.showPopup({title: 'Fixture popup', message: 'Pick one',
+    buttons: [{id: 'ok', type: 'ok'}, {id: 'cancel', type: 'cancel'}, {id: 'delete', type: 'destructive', text: 'Delete'}]},
+    (id) => out('popup-result', 'popup: ' + (id || 'none'))));
+  on('open-link', () => tg.openLink('https://example.com/fixture'));
+  on('open-tg-link', () => tg.openTelegramLink('https://t.me/telegram'));
+  tg.onEvent('themeChanged', showState);
+  tg.onEvent('viewportChanged', showState);
+}
+
+on('js-alert', () => { alert('fixture js alert'); out('dialog-result', 'alert closed'); });
+on('js-confirm', () => out('dialog-result', 'confirm: ' + confirm('fixture js confirm?')));
+on('js-prompt', () => out('dialog-result', 'prompt: ' + prompt('Your answer?', 'default')));
+
+on('fetch-ok', async () => {
+  const r = await fetch('./data.json?hash=fixturehash&n=1', {cache: 'no-store'});
+  const j = await r.json();
+  out('net-result', `ok: ${j.items.length} items`);
+});
+on('fetch-404', async () => {
+  const r = await fetch('./missing.json', {cache: 'no-store'});
+  out('net-result', 'status: ' + r.status);
+});
+on('post-json', async () => {
+  const r = await fetch('./data.json', {method: 'POST', cache: 'no-store',
+    headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer fixture-secret-token'},
+    body: JSON.stringify({answer: 42, initData: 'fixture-init-data'})});
+  out('net-result', 'post: ' + r.status);
+});
+on('console-error', () => console.error('fixture console error'));
+on('console-log', () => console.log('fixture log', {n: 1}));
+on('throw', () => setTimeout(() => { throw new Error('fixture uncaught error'); }, 0));
+
+function sortable(listId, resultId, holdMs) {
+  const list = $(listId);
+  const order = () => [...list.children].map((li) => li.dataset.card).join(',');
+  out(resultId, 'order: ' + order());
+  let dragged = null, from = 0, armed = false, timer = null, startY = 0;
+  list.addEventListener('pointerdown', (e) => {
+    const li = e.target.closest('li');
+    if (!li) return;
+    dragged = li; from = [...list.children].indexOf(li) + 1; startY = e.clientY;
+    li.setPointerCapture(e.pointerId);
+    armed = !holdMs;
+    if (holdMs) timer = setTimeout(() => { armed = true; li.classList.add('dragging'); }, holdMs);
+    else li.classList.add('dragging');
+  });
+  list.addEventListener('pointermove', (e) => {
+    if (!dragged) return;
+    if (!armed) {
+      if (Math.abs(e.clientY - startY) > 4) { clearTimeout(timer); out(resultId, 'order: ' + order() + ' | hold: too early'); dragged = null; }
+      return;
+    }
+    const over = [...list.children].find((li) => {
+      if (li === dragged) return false;
+      const r = li.getBoundingClientRect();
+      return e.clientY >= r.top && e.clientY < r.bottom;
+    });
+    if (!over) return;
+    const kids = [...list.children];
+    if (kids.indexOf(over) > kids.indexOf(dragged)) over.after(dragged); else over.before(dragged);
+  });
+  const end = () => {
+    if (!dragged) return;
+    clearTimeout(timer);
+    const to = [...list.children].indexOf(dragged) + 1;
+    dragged.classList.remove('dragging');
+    out(resultId, `order: ${order()} | last: ${dragged.dataset.card} ${from}->${to}`);
+    dragged = null; armed = false;
+  };
+  list.addEventListener('pointerup', end);
+  list.addEventListener('pointercancel', end);
+}
+sortable('sortable', 'drag-result', 0);
+sortable('sortable-hold', 'drag-hold-result', 300);
+
+const inner = $('inner');
+for (let i = 1; i <= 50; i++) { const d = document.createElement('div'); d.textContent = 'Row ' + i; inner.appendChild(d); }
+inner.addEventListener('scroll', () => out('inner-pos', 'inner: ' + Math.round(inner.scrollTop)));
+const list = $('list');
+for (let i = 1; i <= 200; i++) { const li = document.createElement('li'); li.className = 'item'; li.textContent = 'Item ' + i; list.appendChild(li); }
+window.addEventListener('scroll', () => out('scroll-pos', 'scroll: ' + Math.round(window.scrollY)));
+
+function showState() {
+  out('state', JSON.stringify(tg ? {version: tg.version, platform: tg.platform, colorScheme: tg.colorScheme,
+    viewportHeight: tg.viewportHeight, isExpanded: tg.isExpanded,
+    startParam: (tg.initDataUnsafe || {}).start_param || null} : {telegram: false}));
+}
+showState();
+</script>
+</body>
+</html>
