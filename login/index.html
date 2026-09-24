@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="fixture-version" content="3">
+<title>TGMCP Fixture Login</title>
+<style>body { font-family: system-ui, sans-serif; margin: 16px; } .out { font-weight: 600; }</style>
+</head>
+<body>
+<h1>TGMCP Fixture Login</h1>
+<p>Target of the fixture bot's <code>login_url</code> button. It shows which fields Telegram passed; it never prints the hash.</p>
+<div id="login-result" class="out"></div>
+<script>
+const q = new URLSearchParams(location.search);
+const field = (k) => q.get(k) || '-';
+document.getElementById('login-result').textContent =
+  `login: id=${field('id')} first_name=${field('first_name')} username=${field('username')} auth_date=${field('auth_date')} hash=${q.has('hash') ? 'present' : 'absent'}`;
+</script>
+</body>
+</html>

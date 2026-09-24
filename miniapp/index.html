@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="fixture-version" content="2">
+<meta name="fixture-version" content="3">
 <title>TGMCP Fixture Mini App</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
@@ -19,11 +19,13 @@
               background: var(--tg-theme-secondary-bg-color, #f3f3f3); user-select: none; touch-action: none; cursor: grab; }
   .cards li.dragging { opacity: .6; }
   #list li { height: 40px; line-height: 40px; }
+  .card { padding: 8px 12px; border: 2px solid currentColor; border-radius: 8px; max-width: 240px; }
+  .card.primary { font-weight: 700; }
 </style>
 </head>
 <body>
 <h1>TGMCP Fixture Mini App</h1>
-<div>fixture version <span id="version">2</span></div>
+<div>fixture version <span id="version">3</span></div>
 
 <section id="greet-section">
   <label for="name">Your name</label><br>
@@ -112,6 +114,65 @@
   <h2>State</h2>
   <div id="state" class="out"></div>
   <div id="scroll-pos" class="out">scroll: 0</div>
+</section>
+
+<section id="inspect">
+  <h2>Inspect</h2>
+  <div id="card" class="card primary" data-kind="demo" style="color: rgb(200, 30, 30)">Card body</div>
+  <div id="hidden-note" style="display:none">hidden</div>
+  <a id="styled-link" href="#styled" aria-label="Styled link">styled</a>
+</section>
+
+<section id="async">
+  <h2>Async</h2>
+  <button id="delayed-show">Show late content</button>
+  <button id="delayed-hide">Hide late content</button>
+  <button id="slow-fetch">Slow fetch chain</button>
+  <button id="navigate">Go to page 2</button>
+  <div id="late-slot"></div>
+  <div id="page2" hidden>Page 2</div>
+</section>
+
+<section id="events">
+  <h2>Bridge events</h2>
+  <button id="send-data">sendData</button>
+  <button id="request-write">requestWriteAccess</button>
+  <button id="request-contact">requestContact</button>
+  <button id="haptic">Haptic</button>
+  <button id="set-bg">Green background</button>
+  <button id="set-header">Red header</button>
+  <button id="expand">expand</button>
+  <button id="request-theme">Request theme</button>
+  <button id="read-clipboard">Read clipboard</button>
+  <div id="events-log" class="out"></div>
+</section>
+
+<section id="storage">
+  <h2>Storage</h2>
+  <button id="ls-set">Set localStorage</button>
+  <button id="ss-set">Set sessionStorage</button>
+  <button id="cookie-set">Set cookie</button>
+  <button id="cloud-set">Set CloudStorage</button>
+  <button id="cloud-get">Get CloudStorage</button>
+  <button id="device-set">Set DeviceStorage</button>
+  <button id="device-get">Get DeviceStorage</button>
+  <div id="storage-result" class="out"></div>
+</section>
+
+<section id="files">
+  <h2>Files</h2>
+  <input type="file" id="file-input" aria-label="Upload file">
+  <button id="file-button">Choose file</button>
+  <input type="file" id="file-hidden" hidden>
+  <a id="download-link" download="blocked.txt" href="data:text/plain,blocked%20download">Download link</a>
+  <button id="download-sdk">downloadFile</button>
+  <div id="file-info" class="out"></div>
+</section>
+
+<section id="theme-section">
+  <h2>Theme and viewport</h2>
+  <div id="theme-info" class="out"></div>
+  <div id="viewport-info" class="out"></div>
 </section>
 
 <section id="list-section">
@@ -234,10 +295,76 @@ const list = $('list');
 for (let i = 1; i <= 200; i++) { const li = document.createElement('li'); li.className = 'item'; li.textContent = 'Item ' + i; list.appendChild(li); }
 window.addEventListener('scroll', () => out('scroll-pos', 'scroll: ' + Math.round(window.scrollY)));
 
+
+// --- 0.5.0 fixtures: inspect / async / bridge events / storage / files / theme -------------
+const elog = (line) => { $('events-log').textContent += line + '\n'; };
+on('delayed-show', () => setTimeout(() => {
+  if ($('late')) return;
+  const d = document.createElement('div'); d.id = 'late'; d.textContent = 'Late content'; $('late-slot').appendChild(d);
+}, 1200));
+on('delayed-hide', () => setTimeout(() => { const l = $('late'); if (l) l.remove(); }, 800));
+on('slow-fetch', async () => {
+  for (let i = 1; i <= 5; i++) {
+    await fetch('./data.json?slow=' + i, {cache: 'no-store'});
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  out('net-result', 'slow: 5 done');
+});
+on('navigate', () => {
+  history.pushState(null, '', location.pathname + (location.search ? location.search + '&' : '?') + 'page=2' + location.hash);
+  $('page2').hidden = false;
+});
+
+if (tg) {
+  on('send-data', () => { tg.sendData('fixture-data'); elog('sent data'); });
+  on('request-write', () => tg.requestWriteAccess((ok) => elog('writeAccess: ' + ok)));
+  on('request-contact', () => tg.requestContact((ok) => elog('contact: ' + ok)));
+  on('haptic', () => { tg.HapticFeedback.impactOccurred('medium'); elog('haptic'); });
+  on('set-bg', () => { tg.setBackgroundColor('#00ff00'); elog('background set'); });
+  on('set-header', () => { tg.setHeaderColor('#ff0000'); elog('header set'); });
+  on('expand', () => { tg.expand(); elog('expand requested'); });
+  on('request-theme', () => { Telegram.WebView.postEvent('web_app_request_theme'); elog('theme requested'); });
+  on('read-clipboard', () => tg.readTextFromClipboard((text) => elog('clipboard: ' + (text === null ? 'null' : 'text'))));
+  ['themeChanged', 'viewportChanged', 'fullscreenChanged', 'writeAccessRequested', 'contactRequested',
+   'clipboardTextReceived'].forEach((ev) => tg.onEvent(ev, (d) => elog(ev + (d && d.status ? ': ' + d.status : ''))));
+  on('cloud-set', () => tg.CloudStorage.setItem('fixture', 'cloud-1', (err, ok) => out('storage-result', 'cloud set: ' + (err || ok))));
+  on('cloud-get', () => tg.CloudStorage.getItem('fixture', (err, v) => out('storage-result', 'cloud: ' + (err || v))));
+  const device = () => tg.isVersionAtLeast && tg.isVersionAtLeast('9.0') && tg.DeviceStorage;
+  on('device-set', () => device() ? tg.DeviceStorage.setItem('fixture', 'device-1', (err, ok) => out('storage-result', 'device set: ' + (err || ok)))
+                                  : out('storage-result', 'device: unsupported'));
+  on('device-get', () => device() ? tg.DeviceStorage.getItem('fixture', (err, v) => out('storage-result', 'device: ' + (err || v)))
+                                  : out('storage-result', 'device: unsupported'));
+  on('download-sdk', () => tg.downloadFile({url: new URL('./fixture.txt', location.href).href, file_name: 'fixture.txt'},
+                                           (ok) => out('file-info', 'download: ' + ok)));
+}
+on('ls-set', () => { localStorage.setItem('fixture', 'local-1'); out('storage-result', 'local set'); });
+on('ss-set', () => { sessionStorage.setItem('fixture', 'session-1'); out('storage-result', 'session set'); });
+on('cookie-set', () => { document.cookie = 'fixture=cookie-1; SameSite=None; Secure; Path=/'; out('storage-result', 'cookie: ' + (document.cookie.includes('fixture=') ? 'set' : 'blocked')); });
+
+const showFile = (input) => {
+  const f = input.files && input.files[0];
+  out('file-info', f ? `file: ${f.name} ${f.size}` : 'file: none');
+};
+$('file-input').addEventListener('change', (e) => showFile(e.target));
+$('file-hidden').addEventListener('change', (e) => showFile(e.target));
+on('file-button', () => $('file-hidden').click());
+
+const dark = window.matchMedia('(prefers-color-scheme: dark)');
+function showTheme() {
+  out('theme-info', `scheme: ${dark.matches ? 'dark' : 'light'} tg: ${tg ? tg.colorScheme : 'none'} bg: ${tg ? (tg.themeParams || {}).bg_color || 'none' : 'none'}`);
+}
+function showViewport() { out('viewport-info', `${window.innerWidth}x${window.innerHeight}`); }
+dark.addEventListener('change', showTheme);
+if (tg) tg.onEvent('themeChanged', showTheme);
+window.addEventListener('resize', showViewport);
+showTheme(); showViewport();
+
 function showState() {
   out('state', JSON.stringify(tg ? {version: tg.version, platform: tg.platform, colorScheme: tg.colorScheme,
     viewportHeight: tg.viewportHeight, isExpanded: tg.isExpanded,
-    startParam: (tg.initDataUnsafe || {}).start_param || null} : {telegram: false}));
+    startParam: (tg.initDataUnsafe || {}).start_param || null, themeParams: tg.themeParams || {},
+    headerColor: tg.headerColor || null, backgroundColor: tg.backgroundColor || null,
+    isFullscreen: !!tg.isFullscreen, safeAreaInset: tg.safeAreaInset || null} : {telegram: false}));
 }
 showState();
 </script>
